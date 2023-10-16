@@ -1,0 +1,431 @@
+---
+title: "DATA PREPARATION"
+author: "TEJO SAI KRISHNA KOTTE"
+date: "10/15/23"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+```
+
+# Importing the datasets
+```{r Importing data,echo=TRUE}
+# Importing the two csv files
+data1<-read.csv('survey1.csv')
+data2<-read.csv('survey2.csv')
+dim(data1)
+dim(data2)
+```
+
+# Combining the datasets
+```{r Combining data,echo=TRUE}
+# Combining the two dataframes to a single dataframe called survey
+survey <- rbind(data1, data2)
+dim(survey)
+```
+
+By comparing the dimensions we can see that we have all the rows and columns combined successfully
+
+# Data Cleaning
+```{r Data Cleaning1,echo=TRUE}
+# Lets look for some missing data first
+missing_data <- is.na(survey)
+
+# Summarize missing values
+summary_missing <- colSums(missing_data)
+
+# Print the summary
+print(summary_missing)
+```
+
+We can see that we have some columns that have missing values. We will first drop the comments,state,work_interfere columns because they have almost 90,50,25 percent of the missing values respectively. This makes no sense to analyse these columns
+
+```{r Data Cleaning2,echo=TRUE}
+# droping the columns
+survey <- select(survey, -comments, -state,-work_interfere,-mental_health_consequence,-phys_health_consequence,-coworkers,-supervisor,mental_health_interview,-phys_health_interview,-mental_vs_physical,-obs_consequence)
+dim(survey)
+head(survey)
+```
+
+we can see that we have successfully dropped the columns.
+We now drop the rows that have fewer missing values in the columns like Age,self_employed,family_history,treatment,tech_company
+```{r Data Cleaning3,echo=TRUE}
+# Remove rows with missing values in Age,self_employed,family_history,treatment,tech_company columns
+survey <- na.omit(survey, cols = "Age","self_employed","family_history","treatment","tech_company")
+dim(survey)
+```
+We have successfully removed all the NA values. Lets recheck once.
+
+```{r Data Cleaning4,echo=TRUE}
+# Lets look for some missing data first
+missing_data <- is.na(survey)
+
+# Summarize missing values
+summary_missing <- colSums(missing_data)
+
+# Print the summary
+print(summary_missing)
+```
+
+
+```{r Data Cleaning5,echo=TRUE}
+# Reordering the indexes
+survey <- data.frame(survey, row.names = NULL)
+dim(survey)
+head(survey)
+tail(survey)
+```
+we have successfully reordered the indexes of our dataframe.
+We can see that we have successfully removed all the null  values while keeping most of our data. Now its time to check the structure of our data.
+```{r Data Cleaning6,echo=TRUE}
+str(survey)
+```
+The structure looks good except for one column (TimeStamp).We will take a look at the summary of the data first.
+
+```{r Data Cleaning7,echo=TRUE}
+summary(survey)
+```
+From the summary of Age column above we can see that the minimum value in the Age column is -1726. We now will clean the Age column as Age cannot be negative. And also the mean value and max value are also abnormal for Age column.
+```{r Data Cleaning8,echo=TRUE}
+# Plotting using ggplot2
+ggplot(data = survey, aes(x = seq_along(Age), y = Age)) +
+  geom_line() +
+  labs(x = "Index", y = "Age", title = "Age Trend")
+
+# Remove rows with empty Timestamp cells
+survey <- survey %>%
+  filter(Age != "")
+# Filtering the Age column
+survey <- survey %>%
+  filter(Age > 0, Age < 100)
+dim(survey)
+```
+As you can see there are some outliers in the Age column.We filtered out those using the filter method.
+```{r Data Cleaning9,echo=TRUE}
+#Summary on Age column
+summary(survey$Age)
+```
+Now the Age column looks good.
+We will clean the Timestamp column.
+```{r Data Cleaning10,echo=TRUE}
+# Remove rows with empty Timestamp cells
+survey <- survey %>%
+  filter(Timestamp != "")
+dim(survey)
+```
+In the Timestamp column, the data structure is not consistent. Some of the records have "Wednesday, August 27, 2014" date format. But most of the records have "9/9/14 13:49" this format.We shall remove the records with the latter structure.
+
+```{r Data Cleaning11,echo=TRUE}
+# Remove rows bad structure of Timestamp
+survey <- survey %>%
+  filter(Timestamp != "Wednesday, August 27, 2014")
+dim(survey)
+```
+
+The Timestamp column is of char type we will now convert it into timestamp type
+```{r Data Cleaning12,echo=TRUE}
+# Convert "Timestamp" to datetime type using POSIXct.
+survey$Timestamp <- as.POSIXct(survey$Timestamp, format = "%m/%d/%y %H:%M")
+str(survey)
+```
+You can see that we changed the format of our Timestamp label.
+Lets move on to the gender column.
+```{r Data Cleaning13,echo=TRUE}
+# Remove rows with empty Gender cells
+survey <- survey %>%
+  filter(Gender != "")
+dim(survey)
+
+# Create a bar plot using base R
+gender_counts <- table(survey$Gender)
+print(gender_counts)
+barplot(gender_counts, main = "Gender Distribution", xlab = "Gender", ylab = "Count")
+```
+We will simply have three categories namely Male, Female and Other.
+```{r Data Cleaning14,echo=TRUE}
+# Define a function to group genders
+group_genders <- function(gender) {
+  gender <- tolower(gender)  # Convert to lowercase
+  if (gender %in% c("male", "m", "man", "make", "cis male", "cis man")) return("Male")
+  if (gender %in% c("female", "f", "woman", "cis female", "cis woman")) return("Female")
+  return("Other")
+}
+
+# Apply the grouping function to the Gender column
+survey$GroupedGender <- sapply(survey$Gender, group_genders)
+
+# Create a bar plot using ggplot2
+ggplot(data = survey, aes(x = GroupedGender)) +
+  geom_bar() +
+  labs(x = "Gender Group", y = "Count", title = "Gender Distribution")
+
+# Drop the old Gender column
+survey <- select(survey, -Gender)
+dim(survey)
+```
+
+We will now move on to the Country column.
+```{r Data Cleaning15, echo=TRUE}
+# Remove rows with empty Gender cells
+survey <- survey %>%
+  filter(Country != "")
+dim(survey)
+# We will plot and see the unique countries
+country_counts <- table(survey$Country)
+print(country_counts)
+barplot(country_counts, main = "Country Distribution", xlab = "Country", ylab = "Count")
+```
+
+The country column looks good.The no_employees column has many inconsistent values. We will drop it.
+```{r Data Cleaning16, echo=TRUE}
+# Drop no_employees column
+survey <- select(survey, columns=-no_employees)
+
+```
+Now we shall move on to the self_employed column.
+```{r Data Cleaning17, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(self_employed != "")
+dim(survey)
+```
+we have successfully removed 4 rows.
+Now we shall look into the values in the self_employed column.
+```{r Dara Cleaning18,echo=TRUE}
+# Get the counts of unique values in the "self_employed" column
+self_employed_counts <- table(survey$self_employed)
+
+# Print the counts
+print(self_employed_counts)
+```
+We can see that there are two unique values with the counts above. This column looks clean.
+We will now move onto the next column family History
+```{r Data Cleaning19, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(family_history != "")
+dim(survey)
+```
+All the rows are clean
+Now we shall look into the values in the family_history column.
+```{r Dara Cleaning20,echo=TRUE}
+# Get the counts of unique values in the "self_employed" column
+family_history_counts <- table(survey$family_history)
+
+# Print the counts
+print(family_history_counts)
+```
+We can see that there are two unique values with the counts above. This column looks clean.
+We will now move onto the next column treatment.
+```{r Data Cleaning21, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(treatment != "")
+dim(survey)
+```
+All the rows are clean
+Now we shall look into the values in the treatment column.
+```{r Dara Cleaning22,echo=TRUE}
+treatment_counts <- table(survey$treatment)
+
+# Print the counts
+print(treatment_counts)
+```
+We can see that we have two rows with - value. We will drop these two rows and then we will convert the N to No and Y to Yes respectively.
+```{r Data Cleaning23, echo=TRUE}
+# Drop the rows with '-' value
+survey <- survey %>%
+  filter(treatment != "-")
+dim(survey)
+```
+
+```{r Data Cleaning24, echo=TRUE}
+
+# Replace values in the "treatment" column
+survey$treatment <- ifelse(survey$treatment == "N", "No", ifelse(survey$treatment == "Y", "Yes", survey$treatment))
+```
+We will print te unique values once again to cross check.
+```{r Dara Cleaning25,echo=TRUE}
+treatment_counts <- table(survey$treatment)
+
+# Print the counts
+print(treatment_counts)
+```
+Now the treatment column looks good. We shall move onto the next column remote_work.
+```{r Data Cleaning26, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(remote_work != "")
+dim(survey)
+```
+Now we shall look into the values in the remote_work column.
+```{r Dara Cleaning27,echo=TRUE}
+remote_work_counts <- table(survey$remote_work)
+
+# Print the counts
+print(remote_work_counts)
+```
+
+We can see that we have two rows with - value. We will drop these two rows.
+```{r Data Cleaning28, echo=TRUE}
+# Drop the rows with '-' value
+survey <- survey %>%
+  filter(remote_work != "-")
+dim(survey)
+```
+This column is clean. we will now move onto tech_company column.
+```{r Data Cleaning29, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(tech_company != "")
+dim(survey)
+```
+Now we shall look into the values in the tech_company column.
+```{r Dara Cleaning30,echo=TRUE}
+tech_company_counts <- table(survey$tech_company)
+
+# Print the counts
+print(tech_company_counts)
+```
+We have one - value. we shall drop that row
+```{r Data Cleaning31, echo=TRUE}
+# Drop the rows with '-' value
+survey <- survey %>%
+  filter(tech_company != "-")
+dim(survey)
+```
+Now we will move onto the benefits column
+```{r Data Cleaning32, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(benefits != "")
+dim(survey)
+```
+Now we shall look into the values in the benefits column.
+```{r Dara Cleaning33,echo=TRUE}
+benefits_counts <- table(survey$benefits)
+
+# Print the counts
+print(benefits_counts)
+```
+
+
+
+```{r Dara Cleaning34,echo=TRUE}
+# Clean the "benefits" column
+
+# Define a function to group benefits
+group_benefits <- function(benefit) {
+  benefit <- tolower(benefit)  # Convert to lowercase
+  if (benefit %in% c("don't know", " not sure")) return("Not sure")
+  if (benefit %in% c(" no ")) return("No")
+  if (benefit %in% c("yes")) return("Yes")
+  return("Other")
+}
+
+# Apply the grouping function to the Gender column
+survey$benefits <- sapply(survey$benefits, group_benefits)
+benefits_counts <- table(survey$benefits)
+
+# Print the counts
+print(benefits_counts)
+```
+We have successfully cleaned the benefits column. We will move onto the next column care_options.
+Now we will move onto the benefits column
+```{r Data Cleaning35, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(care_options != "")
+dim(survey)
+```
+Now we shall look into the values in the care_options column.
+```{r Dara Cleaning36,echo=TRUE}
+care_options_counts <- table(survey$care_options)
+
+# Print the counts
+print(care_options_counts)
+```
+This column looks good. Moving onto wellness_program column.
+
+```{r Data Cleaning37, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(wellness_program != "")
+dim(survey)
+```
+Now we shall look into the values in the wellness_program column.
+```{r Dara Cleaning38,echo=TRUE}
+wellness_program_counts <- table(survey$wellness_program)
+
+# Print the counts
+print(wellness_program_counts)
+```
+This column looks good, we shall move onto the next column seek_help
+
+```{r Data Cleaning39, echo=TRUE}
+# Drop the rows with empty cells
+survey <- survey %>%
+  filter(seek_help != "")
+dim(survey)
+```
+Now we shall look into the values in the seek_help column.
+```{r Dara Cleaning40,echo=TRUE}
+seek_help_counts <- table(survey$seek_help)
+
+# Print the counts
+print(seek_help_counts)
+```
+We can use the group_benefits function we defined above to clean this column
+
+```{r Data Cleaning41,echo=TRUE}
+survey$seek_help <- sapply(survey$seek_help, group_benefits)
+seek_help_counts <- table(survey$seek_help)
+
+# Print the counts
+print(seek_help_counts)
+```
+We shall omit all the rows with empty cells.
+```{r Data Cleaning42,echo=TRUE}
+remove_empty_rows <- function(data, column_name) {
+  data %>%
+    filter(vars(column_name)!="")
+}
+
+survey <- remove_empty_rows(survey,anonymity)
+survey <- remove_empty_rows(survey,leave)
+survey <- remove_empty_rows(survey,mental_health_consequence)
+survey <- remove_empty_rows(survey,phys_health_consequence)
+survey <- remove_empty_rows(survey,coworkers)
+survey <- remove_empty_rows(survey,supervisor)
+survey <- remove_empty_rows(survey,mental_health_interview)
+survey <- remove_empty_rows(survey,phys_health_interview)
+survey <- remove_empty_rows(survey,mental_vs_physical)
+survey <- remove_empty_rows(survey,obs_consequence)
+dim(survey)
+```
+
+```{r Data Cleaning43,echo=TRUE}
+counts <- table(survey$anonymity)
+print(counts)
+
+```
+
+We can use the group_benefits function we defined above to clean this column
+
+```{r Data Cleaning44,echo=TRUE}
+survey$anonymity <- sapply(survey$anonymity, group_benefits)
+counts <- table(survey$anonymity)
+
+# Print the counts
+print(counts)
+```
+We have cleaned all of our required columns. Now we need to save this dataframe into a csv file for later usage.
+# Saving the dataframe into csv file.
+```{r Data Cleaning45,echo=TRUE}
+write.csv(survey, file = "survey.csv", row.names = FALSE)
+```
